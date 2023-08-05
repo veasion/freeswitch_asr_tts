@@ -56,45 +56,9 @@ using AlibabaNls::SpeechTranscriberRequest;
 struct AsrParamCallBack {
     std::string caller;
     std::string callee;
-	char *sUUID ;
-
+	char *sUUID;
+	switch_core_session_t *session;
 };
-
-
-bool postResult(const char *jsonObj, AsrParamCallBack *cbParam)
-{
-    CURL *curl;
-    CURLcode res;
-
-    curl_global_init(CURL_GLOBAL_ALL);
-    curl = curl_easy_init();
-    if (curl == NULL) {
-        return false;
-    }
-
-    char str1[8000];
-
-    sprintf(str1, "{\"call_info\":{\"call_id\": \"%s\",\"caller\": \"%s\",\"callee\": \"%s\"},\"asr_result\": %s}", cbParam->sUUID,cbParam->caller.c_str(),cbParam->callee.c_str(),jsonObj);
-
-    struct curl_slist *headers = NULL;
-    curl_slist_append(headers, "Accept: application/json");
-    curl_slist_append(headers, "Content-Type: application/json");
-    curl_slist_append(headers, "charset: utf-8");
-
-    curl_easy_setopt(curl, CURLOPT_URL, "http://127.0.0.1:8080/asr_event");
-
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
-
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS, str1);
-
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "post url %s:%s\n", "http://127.0.0.1:8080/asr_event",jsonObj);
-
-    res = curl_easy_perform(curl);
-
-    curl_easy_cleanup(curl);
-    curl_global_cleanup();
-    return res;
-}
 
 
 //================= aliyun asr start ===============
@@ -167,10 +131,10 @@ void onTranscriptionStarted(NlsEvent* cbEvent, void* cbParam) {
    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrTranscriptionStarted: all response=%s\n", cbEvent->getAllResponse());
 
    switch_da_t *pvt;
-   switch_core_session_t *ses;
-   if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
-       switch_core_session_rwunlock(ses);
-   }
+   switch_core_session_t *ses = tmpParam->session;
+   // if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+   //     switch_core_session_rwunlock(ses);
+   // }
    switch_channel_t *channel = switch_core_session_get_channel(ses);
    if((pvt = (switch_da_t*)switch_channel_get_private(channel, "asr")))
    {
@@ -214,10 +178,10 @@ void onAsrSentenceEnd(NlsEvent* cbEvent, void* cbParam) {
                 );
        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "onAsrSentenceEnd: all response=%s\n", cbEvent->getAllResponse());
        switch_event_t *event = NULL;
-	   switch_core_session_t *ses;
-       if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
-		   switch_core_session_rwunlock(ses);
-	   }
+	   switch_core_session_t *ses = tmpParam->session;
+       // if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+	   //     switch_core_session_rwunlock(ses);
+	   // }
        switch_channel_t *channel = switch_core_session_get_channel(ses);
        if(switch_event_create(&event, SWITCH_EVENT_CUSTOM) == SWITCH_STATUS_SUCCESS) {
             event->subclass_name = strdup("start_asr");
@@ -225,12 +189,8 @@ void onAsrSentenceEnd(NlsEvent* cbEvent, void* cbParam) {
             switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "UUID", tmpParam->sUUID);
             switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "ASR-Response", cbEvent->getAllResponse());
             switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Channel", switch_channel_get_name(channel));
-            //switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Timestamp",currtime);
-            //switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Answered",answered);
             switch_event_fire(&event);
        }
-
-       postResult(cbEvent->getAllResponse(),tmpParam);
 }
 
 /**
@@ -250,10 +210,10 @@ void onAsrTranscriptionResultChanged(NlsEvent* cbEvent, void* cbParam) {
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "onAsrTranscriptionResultChanged: all response=%s\n", cbEvent->getAllResponse());
 
     switch_event_t *event = NULL;
-	switch_core_session_t *ses;
-    if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
-		switch_core_session_rwunlock(ses);
-	}
+	switch_core_session_t *ses = tmpParam->session;
+    // if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+	//    switch_core_session_rwunlock(ses);
+	// }
     switch_channel_t *channel = switch_core_session_get_channel(ses);
     if (switch_event_create(&event, SWITCH_EVENT_CUSTOM) == SWITCH_STATUS_SUCCESS) {
         event->subclass_name = strdup("update_asr");
@@ -261,11 +221,8 @@ void onAsrTranscriptionResultChanged(NlsEvent* cbEvent, void* cbParam) {
         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "UUID", tmpParam->sUUID);
         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "ASR-Response", cbEvent->getAllResponse());
         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Channel", switch_channel_get_name(channel));
-        //switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Timestamp",currtime);
-        //switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Answered",answered);
         switch_event_fire(&event);
     }
-    postResult(cbEvent->getAllResponse(),tmpParam);
 }
 
 /**
@@ -280,16 +237,16 @@ void onAsrTranscriptionCompleted(NlsEvent* cbEvent, void* cbParam) {
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrTranscriptionCompleted: status code=%d, task id=%s\n", cbEvent->getStatusCode(), cbEvent->getTaskId());
 
     switch_da_t *pvt;
-	switch_core_session_t *ses;
-    if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
-		switch_core_session_rwunlock(ses);
-	}
+	switch_core_session_t *ses = tmpParam->session;
+    // if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+	//     switch_core_session_rwunlock(ses);
+	// }
     switch_channel_t *channel = switch_core_session_get_channel(ses);
     if((pvt = (switch_da_t*)switch_channel_get_private(channel, "asr")))
     {
-//        if(pvt->frameDataBuffer){
-//            free(pvt->frameDataBuffer);
-//        }
+       // if(pvt->frameDataBuffer){
+       //   free(pvt->frameDataBuffer);
+       // }
     }
 }
 
@@ -303,20 +260,19 @@ void onAsrTaskFailed(NlsEvent* cbEvent, void* cbParam) {
 	AsrParamCallBack* tmpParam = (AsrParamCallBack*)cbParam;
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrTaskFailed: %s\n", tmpParam->sUUID);
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrTaskFailed: status code=%d, task id=%s, error message=%s\n", cbEvent->getStatusCode(), cbEvent->getTaskId(), cbEvent->getErrorMessage());
-    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "onAsrTaskFailed: all response=%s\n", cbEvent->getAllResponse());
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO,"onAsrTaskFailed: all response=%s\n", cbEvent->getAllResponse());
 
     switch_da_t *pvt;
-	switch_core_session_t *ses;
-    if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
-		switch_core_session_rwunlock(ses);
-	}
+	switch_core_session_t *ses = tmpParam->session;
+    // if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+	//     switch_core_session_rwunlock(ses);
+	// }
     switch_channel_t *channel = switch_core_session_get_channel(ses);
     if((pvt = (switch_da_t*)switch_channel_get_private(channel, "asr")))
     {
         switch_mutex_lock(pvt->mutex);
         pvt->started = 0;
         switch_mutex_unlock(pvt->mutex);
-
     }
 }
 
@@ -328,8 +284,8 @@ void onAsrTaskFailed(NlsEvent* cbEvent, void* cbParam) {
  */
 void onAsrSentenceSemantics(NlsEvent* cbEvent, void* cbParam) {
     AsrParamCallBack* tmpParam = (AsrParamCallBack*)cbParam;
-     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrSentenceSemantics: %s\n", tmpParam->sUUID);
-     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrSentenceSemantics: all response=%s\n", cbEvent->getAllResponse());
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrSentenceSemantics: %s\n", tmpParam->sUUID);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrSentenceSemantics: all response=%s\n", cbEvent->getAllResponse());
 }
 
 /**
@@ -339,7 +295,6 @@ void onAsrSentenceSemantics(NlsEvent* cbEvent, void* cbParam) {
  * @param cbParam 
  */
 void onAsrChannelClosed(NlsEvent* cbEvent, void* cbParam) {
-
 	AsrParamCallBack* tmpParam = (AsrParamCallBack*)cbParam;
     switch_event_t *event = NULL;
     if(switch_event_create(&event, SWITCH_EVENT_CUSTOM) == SWITCH_STATUS_SUCCESS) {
@@ -358,14 +313,10 @@ void onAsrChannelClosed(NlsEvent* cbEvent, void* cbParam) {
  * @return SpeechTranscriberRequest* 
  */
 SpeechTranscriberRequest* generateAsrRequest(AsrParamCallBack * cbParam) {
-
     time_t now;
-
     time(&now);
-
     if (g_expireTime - now < 10) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "the token will be expired, please generate new token by AccessKey-ID and AccessKey-Secret\n");
-
         if (-1 == generateToken(g_access_key, g_key_secret, &g_token, &g_expireTime)) {
             return NULL;
         }
@@ -374,26 +325,25 @@ SpeechTranscriberRequest* generateAsrRequest(AsrParamCallBack * cbParam) {
     SpeechTranscriberRequest* request = NlsClient::getInstance()->createTranscriberRequest();
     if (request == NULL) {
         switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE, "createTranscriberRequest failed.\n" );
-
         return NULL;
     }
 
     request->setOnTranscriptionStarted(onTranscriptionStarted, cbParam);                // 设置识别启动回调函数
-    request->setOnTranscriptionResultChanged(onAsrTranscriptionResultChanged, cbParam);    // 设置识别结果变化回调函数
-    request->setOnTranscriptionCompleted(onAsrTranscriptionCompleted, cbParam);            // 设置语音转写结束回调函数
-    request->setOnSentenceBegin(onAsrSentenceBegin, cbParam);                              // 设置一句话开始回调函数
-    request->setOnSentenceEnd(onAsrSentenceEnd, cbParam);                                  // 设置一句话结束回调函数
-    request->setOnTaskFailed(onAsrTaskFailed, cbParam);                                    // 设置异常识别回调函数
-    request->setOnChannelClosed(onAsrChannelClosed, cbParam);                              // 设置识别通道关闭回调函数
-    request->setOnSentenceSemantics(onAsrSentenceSemantics, cbParam);                      //设置二次结果返回回调函数, 开启enable_nlp后返回
+    request->setOnTranscriptionResultChanged(onAsrTranscriptionResultChanged, cbParam); // 设置识别结果变化回调函数
+    request->setOnTranscriptionCompleted(onAsrTranscriptionCompleted, cbParam);         // 设置语音转写结束回调函数
+    request->setOnSentenceBegin(onAsrSentenceBegin, cbParam);                           // 设置一句话开始回调函数
+    request->setOnSentenceEnd(onAsrSentenceEnd, cbParam);                               // 设置一句话结束回调函数
+    request->setOnTaskFailed(onAsrTaskFailed, cbParam);                                 // 设置异常识别回调函数
+    request->setOnChannelClosed(onAsrChannelClosed, cbParam);                           // 设置识别通道关闭回调函数
+    request->setOnSentenceSemantics(onAsrSentenceSemantics, cbParam);                   // 设置二次结果返回回调函数, 开启enable_nlp后返回
 
     request->setAppKey(g_app_key.c_str());            // 设置AppKey, 必填参数, 请参照官网申请
 
-    request->setFormat("pcm");                          // 设置音频数据编码格式, 默认是pcm
-    request->setSampleRate(SAMPLE_RATE);                // 设置音频数据采样率, 可选参数，目前支持16000, 8000. 默认是16000
-    request->setIntermediateResult(true);               // 设置是否返回中间识别结果, 可选参数. 默认false
-    request->setPunctuationPrediction(true);            // 设置是否在后处理中添加标点, 可选参数. 默认false
-    request->setInverseTextNormalization(true);         // 设置是否在后处理中执行数字转写, 可选参数. 默认false
+    request->setFormat("pcm");                        // 设置音频数据编码格式, 默认是pcm
+    request->setSampleRate(SAMPLE_RATE);              // 设置音频数据采样率, 可选参数，目前支持16000, 8000. 默认是16000
+    request->setIntermediateResult(true);             // 设置是否返回中间识别结果, 可选参数. 默认false
+    request->setPunctuationPrediction(true);          // 设置是否在后处理中添加标点, 可选参数. 默认false
+    request->setInverseTextNormalization(true);       // 设置是否在后处理中执行数字转写, 可选参数. 默认false
 
     request->setToken(g_token.c_str());
 
@@ -502,22 +452,22 @@ static switch_bool_t asr_callback(switch_media_bug_t *bug, void *user_data, swit
             }
         }
         break;
-        case SWITCH_ABC_TYPE_WRITE_REPLACE:
+        case SWITCH_ABC_TYPE_READ_REPLACE:
         {
             if(pvt->stoped ==1 ){
                 return SWITCH_TRUE;
             }
 
-            switch_frame_t *frame= switch_core_media_bug_get_write_replace_frame(bug);
+            switch_frame_t *frame= switch_core_media_bug_get_read_replace_frame(bug);
             if (!frame) {
                 return SWITCH_TRUE;
             }
 
-            if (frame->channels != 1)
-            {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "nonsupport channels:%d!\n",frame->channels);
-                return SWITCH_TRUE;
-            }
+            // if (frame->channels != 1)
+            // {
+            //     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "nonsupport channels:%d!\n",frame->channels);
+            //     return SWITCH_TRUE;
+            // }
 
             switch_mutex_lock(pvt->mutex);
             if(pvt->started ==0 ) {
@@ -525,11 +475,12 @@ static switch_bool_t asr_callback(switch_media_bug_t *bug, void *user_data, swit
                 if(pvt->starting ==0){
 
                     pvt->starting = 1;
-                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_CRIT, "Starting Transaction \n" );
+                    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "Starting Transaction \n" );
 
                     AsrParamCallBack *cbParam  = new AsrParamCallBack;
 
-                    cbParam->sUUID= switch_channel_get_uuid(channel);
+                    cbParam->sUUID = switch_channel_get_uuid(channel);
+					cbParam->session = pvt->session;
 
                     switch_caller_profile_t  *profile = switch_channel_get_caller_profile(channel);
 
@@ -572,7 +523,7 @@ static switch_bool_t asr_callback(switch_media_bug_t *bug, void *user_data, swit
                 int datalen = frame->datalen;
                 int16_t *dp = (int16_t *)frame->data;
 
-                switch_core_media_bug_set_write_replace_frame(bug, frame);
+                switch_core_media_bug_set_read_replace_frame(bug, frame);
 
                 if (read_impl.actual_samples_per_second != 8000) {
                     if (!pvt->resampler) {
@@ -675,8 +626,7 @@ SWITCH_STANDARD_APP(start_asr_session_function)
     switch_mutex_init(&pvt->mutex,SWITCH_MUTEX_NESTED,pvt->pool);
 
     // session添加media bug
-    if ((status = switch_core_media_bug_add(session, MOD_NAME, NULL,
-        asr_callback, pvt, 0, SMBF_WRITE_REPLACE |  SMBF_NO_PAUSE | SMBF_ONE_ONLY, &(pvt->bug))) != SWITCH_STATUS_SUCCESS) {
+    if ((status = switch_core_media_bug_add(session, MOD_NAME, NULL, asr_callback, pvt, 0, SMBF_READ_REPLACE, &(pvt->bug))) != SWITCH_STATUS_SUCCESS) {
         return;
     }
 
