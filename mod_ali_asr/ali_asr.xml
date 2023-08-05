@@ -1,0 +1,7 @@
+<configuration name="ali_asr.conf" description="mod_ali_asr configuration">
+    <settings>
+        <param name="app_key" value=""/>
+        <param name="access_key" value=""/>
+        <param name="key_secret" value=""/>
+    </settings>
+</configuration>
