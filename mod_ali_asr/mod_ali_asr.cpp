@@ -167,16 +167,17 @@ void onTranscriptionStarted(NlsEvent* cbEvent, void* cbParam) {
    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrTranscriptionStarted: all response=%s\n", cbEvent->getAllResponse());
 
    switch_da_t *pvt;
-   switch_core_session_t *ses = switch_core_session_force_locate(tmpParam->sUUID);
+   switch_core_session_t *ses;
+   if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+       switch_core_session_rwunlock(ses);
+   }
    switch_channel_t *channel = switch_core_session_get_channel(ses);
    if((pvt = (switch_da_t*)switch_channel_get_private(channel, "asr")))
    {
-
       switch_mutex_lock(pvt->mutex);
       pvt->started = 1;
       pvt->starting = 0;
-      switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"I need lock!!!!!!!!!!!! \n"  );
-
+      switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"I need lock!\n");
       switch_mutex_unlock(pvt->mutex);
    }
 }
@@ -213,7 +214,10 @@ void onAsrSentenceEnd(NlsEvent* cbEvent, void* cbParam) {
                 );
        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "onAsrSentenceEnd: all response=%s\n", cbEvent->getAllResponse());
        switch_event_t *event = NULL;
-       switch_core_session_t *ses = switch_core_session_force_locate(tmpParam->sUUID);
+	   switch_core_session_t *ses;
+       if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+		   switch_core_session_rwunlock(ses);
+	   }
        switch_channel_t *channel = switch_core_session_get_channel(ses);
        if(switch_event_create(&event, SWITCH_EVENT_CUSTOM) == SWITCH_STATUS_SUCCESS) {
             event->subclass_name = strdup("start_asr");
@@ -246,7 +250,10 @@ void onAsrTranscriptionResultChanged(NlsEvent* cbEvent, void* cbParam) {
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "onAsrTranscriptionResultChanged: all response=%s\n", cbEvent->getAllResponse());
 
     switch_event_t *event = NULL;
-    switch_core_session_t *ses = switch_core_session_force_locate(tmpParam->sUUID);
+	switch_core_session_t *ses;
+    if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+		switch_core_session_rwunlock(ses);
+	}
     switch_channel_t *channel = switch_core_session_get_channel(ses);
     if (switch_event_create(&event, SWITCH_EVENT_CUSTOM) == SWITCH_STATUS_SUCCESS) {
         event->subclass_name = strdup("update_asr");
@@ -273,7 +280,10 @@ void onAsrTranscriptionCompleted(NlsEvent* cbEvent, void* cbParam) {
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrTranscriptionCompleted: status code=%d, task id=%s\n", cbEvent->getStatusCode(), cbEvent->getTaskId());
 
     switch_da_t *pvt;
-    switch_core_session_t *ses = switch_core_session_force_locate(tmpParam->sUUID);
+	switch_core_session_t *ses;
+    if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+		switch_core_session_rwunlock(ses);
+	}
     switch_channel_t *channel = switch_core_session_get_channel(ses);
     if((pvt = (switch_da_t*)switch_channel_get_private(channel, "asr")))
     {
@@ -296,7 +306,10 @@ void onAsrTaskFailed(NlsEvent* cbEvent, void* cbParam) {
     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "onAsrTaskFailed: all response=%s\n", cbEvent->getAllResponse());
 
     switch_da_t *pvt;
-    switch_core_session_t *ses = switch_core_session_force_locate(tmpParam->sUUID);
+	switch_core_session_t *ses;
+    if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+		switch_core_session_rwunlock(ses);
+	}
     switch_channel_t *channel = switch_core_session_get_channel(ses);
     if((pvt = (switch_da_t*)switch_channel_get_private(channel, "asr")))
     {
