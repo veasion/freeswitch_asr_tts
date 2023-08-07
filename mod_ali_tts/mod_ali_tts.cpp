@@ -155,10 +155,10 @@ static switch_status_t ali_speech_open(switch_speech_handle_t *sh, const char *v
 
 static switch_status_t ali_speech_close(switch_speech_handle_t *sh, switch_speech_flag_t *flags)
 {
-	ali_config *ali = (ali_config *) sh->private_info;
 	// delete file
-    // // switch_file_remove(ali->voice_file, NULL);
-	// unlink(ali->voice_file);
+	ali_config *ali = (ali_config *) sh->private_info;
+    // switch_file_remove(ali->voice_file, NULL);
+	unlink(ali->voice_file);
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_speech_close.\n");
     return SWITCH_STATUS_SUCCESS;
 }
@@ -170,7 +170,8 @@ static void on_completed(NlsEvent* cbEvent, void* cbParam) {
 static void on_closed(NlsEvent* cbEvent, void* cbParam) {
     ParamCallBack* tmpParam = (ParamCallBack*)cbParam;
     tmpParam->audioFile.close();
-    NlsClient::getInstance()->releaseSynthesizerRequest(tmpParam->request);
+	// 这个释放 request 有 bug，会卡住
+    // NlsClient::getInstance()->releaseSynthesizerRequest(tmpParam->request);
     delete tmpParam;
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_closed.\n");
 }
