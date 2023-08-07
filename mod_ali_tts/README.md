@@ -30,23 +30,19 @@ application 使用方式：
 
 speak  <engine>|<voice>|<text>
 
+示例：
 
-
-变量值示例：
-
-engine：ali_tts
-
-voice：aixia
-
-text：您好，有什么我可以帮助您的吗？
+speak ali_tts|aixia|您好，有什么我可以帮助您的吗？
 
 
 
-如果不指定engine和voice，可以通过通道变量 tts_engine 和 tts_voice 来指定引擎和发言人。
+也支持通过通道变量指定：
 
 <action application="set" data="tts_engine=ali_tts"/>
 
 <action application="set" data="tts_voice=aixia"/>
+
+<action application="speak" data="您好，有什么我可以帮助您的吗？"/>
 
 
 
