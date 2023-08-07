@@ -66,7 +66,6 @@ static struct {
     char* key_secret;
     int thread_count;
     int cache_size;
-    char cache_path[128];
 } globals;
 
 SWITCH_DECLARE_GLOBAL_STRING_FUNC(set_global_app_key, globals.app_key);
@@ -89,8 +88,8 @@ struct ali_tts_config {
     int pitch_rate;
     char* voice_file;
     int voice_cursor;
-    //switch_file_handle_t *fh;
-    //switch_buffer_t *audio_buffer;
+    // switch_file_handle_t *fh;
+    // switch_buffer_t *audio_buffer;
 };
 
 // 自定义事件回调参数
@@ -103,22 +102,20 @@ typedef struct ali_tts_config ali_config;
 
 static switch_status_t ali_do_config(void) {
     switch_xml_t cfg, xml, settings, param;
-    // inital
+	// memset((char*)&globals, 0, sizeof(globals));
     globals.thread_count = 4;
     globals.cache_size = 1600;
     globals.app_key = NULL;
     globals.access_key = NULL;
     globals.key_secret = NULL;
-    switch_snprintf(globals.cache_path, sizeof(globals.cache_path), "%s%sali_file_cache", SWITCH_GLOBAL_dirs.storage_dir, SWITCH_PATH_SEPARATOR);
+	
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "load ali_tts config");
     
-    if (!(xml = switch_xml_open_cfg(CONFIG_FILE, &cfg, NULL))) {
-        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Open of %s failed\n", CONFIG_FILE);
-    } else {
-        if ((settings = switch_xml_child(cfg, "settings"))) {
+    if ((xml = switch_xml_open_cfg(CONFIG_FILE, &cfg, NULL))) {
+		if ((settings = switch_xml_child(cfg, "settings"))) {
             for (param = switch_xml_child(settings, "param"); param; param = param->next) {
                 char *var = (char *) switch_xml_attr_soft(param, "name");
                 char *val = (char *) switch_xml_attr_soft(param, "value");
-
                 if (!strcmp(var, "thread_count")) {
                     globals.thread_count = atoi(val);
                 } else if (!strcmp(var, "cache_size")) {
@@ -129,57 +126,62 @@ static switch_status_t ali_do_config(void) {
                     set_global_access_key(val);
                 } else if (!strcmp(var, "key_secret")) {
                     set_global_key_secret(val);
-                } else if (!strcmp(var, "cache_path")) {
-                    switch_snprintf(globals.cache_path, sizeof(globals.cache_path), "%s", val);
                 }
             }
         }
         switch_xml_free(xml);
+    } else {
+        switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "Open of %s failed\n", CONFIG_FILE);
     }
     
-    // create ali cache directry
-    switch_dir_make_recursive(globals.cache_path, SWITCH_DEFAULT_DIR_PERMS, NULL);
     return SWITCH_STATUS_SUCCESS;
 }
 
 static switch_status_t ali_speech_open(switch_speech_handle_t *sh, const char *voice_name, int rate, int channels, switch_speech_flag_t *flags)
 {
-    ali_config *ali = (ali_config *) switch_core_alloc(sh->memory_pool, sizeof(*ali));
-    ali->voice = switch_core_strdup(sh->memory_pool, voice_name);
-    ali->sample_rate = rate;
-    ali->volume = 80;
-    ali->speech_rate = 0;
-    ali->pitch_rate = 0;
-    ali->format = switch_core_strdup(sh->memory_pool, "wav");
-    ali->app_key = switch_core_strdup(sh->memory_pool, globals.app_key);
-    ali->access_key = switch_core_strdup(sh->memory_pool, globals.access_key);
-    ali->key_secret = switch_core_strdup(sh->memory_pool, globals.key_secret);
-    sh->private_info = ali;
+    ali_config *conf = (ali_config *) switch_core_alloc(sh->memory_pool, sizeof(ali_config));
+    conf->voice = switch_core_strdup(sh->memory_pool, voice_name);
+    conf->sample_rate = rate;
+    conf->volume = 80;
+    conf->speech_rate = 0;
+    conf->pitch_rate = 0;
+    conf->format = switch_core_strdup(sh->memory_pool, "wav");
+    conf->app_key = switch_core_strdup(sh->memory_pool, globals.app_key);
+    conf->access_key = switch_core_strdup(sh->memory_pool, globals.access_key);
+    conf->key_secret = switch_core_strdup(sh->memory_pool, globals.key_secret);
+    sh->private_info = conf;
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_speech_open.\n");
     return SWITCH_STATUS_SUCCESS;
 }
 
 static switch_status_t ali_speech_close(switch_speech_handle_t *sh, switch_speech_flag_t *flags)
 {
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_speech_close.\n");
     return SWITCH_STATUS_SUCCESS;
 }
 
-static void on_completed(NlsEvent* cbEvent, void* cbParam) {}
+static void on_completed(NlsEvent* cbEvent, void* cbParam) {
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_completed.\n");
+}
 
 static void on_closed(NlsEvent* cbEvent, void* cbParam) {
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_closed.\n");
     ParamCallBack* tmpParam = (ParamCallBack*)cbParam;
     tmpParam->audioFile.close();
     delete tmpParam; 
 }
 
 static void on_failed(NlsEvent* cbEvent, void* cbParam) {
-    // remove file
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_failed.\n");
     ParamCallBack* tmpParam = (ParamCallBack*)cbParam;
+    // remove file
     switch_file_remove(tmpParam->binAudioFile.c_str(), NULL);
 }
 
 static void on_received(NlsEvent* cbEvent, void* cbParam) {
     ParamCallBack* tmpParam = (ParamCallBack*)cbParam;
     const vector<unsigned char>& data = cbEvent->getBinaryData();
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_received: status code=%d, task id=%s, data size=%d.\n", cbEvent->getStatusCode(), cbEvent->getTaskId(), data.size());
     if (data.size() > 0) {
         tmpParam->audioFile.write((char*)&data[0], data.size());
         tmpParam->audioFile.flush();
@@ -194,6 +196,7 @@ static string ali_get_token(const char* accessKey, const char* keySecret) {
     if (-1 != nlsTokenRequest.applyNlsToken()) {
         token = nlsTokenRequest.getToken();
     }
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali token: %s\n", token.c_str());
     return token;
 }
 
@@ -225,6 +228,7 @@ static switch_status_t ali_cloud_tts(const char* appKey, const char* accessKey, 
         ParamCallBack* cbParam = new ParamCallBack;
         cbParam->binAudioFile = file;
         cbParam->audioFile.open(cbParam->binAudioFile.c_str(), std::ios::binary | std::ios::out);
+		// request->setUrl("wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1");
         // 设置音频合成结束回调函数
         request->setOnSynthesisCompleted(on_completed, cbParam);
         // 设置音频合成通道关闭回调函数
@@ -252,11 +256,15 @@ static switch_status_t ali_cloud_tts(const char* appKey, const char* accessKey, 
         // 转换文本
         request->setText(text);
         // start convert
-        if (request->start() >= 0) {
-            request->stop();
-            NlsClient::getInstance()->releaseSynthesizerRequest(request);
+		int status = request->start();
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts request status: %d\n", status);
+        if (status >= 0) {
+			// request->stop();
+            // NlsClient::getInstance()->releaseSynthesizerRequest(request);
             return SWITCH_STATUS_SUCCESS;
-        }
+        } else {
+			request->stop();
+		}
     }
     
     return SWITCH_STATUS_FALSE;
@@ -268,70 +276,29 @@ static string ali_md5(const char* data) {
     return string(digest);
 }
 
-static string ali_to_string(int64_t value, int pattern = 10) {
-    ostringstream os;
-    switch (pattern) {
-        case 2: {
-            bitset<64> b(value);
-            os << b;
-            break;
-        }
-        case 16:
-            os << std::hex << value;
-            break;
-        default:
-            os << value;
-            break;
-    }
-    return os.str();
-}
-
 // start tts
 static switch_status_t ali_speech_feed_tts(switch_speech_handle_t *sh, char *text, switch_speech_flag_t *flags)
 {
     ali_config *ali = (ali_config *) sh->private_info;
-    // start tts
-    // 1. file name voice_md5(params)/md5(text)
-    string params;
-    params += ali->app_key;
-    params += ali->access_key;
-    params += ali->key_secret;
-    params += ali->voice;
-    params += ali->format;
-    params += ali_to_string(ali->sample_rate);
-    params += ali_to_string(ali->volume);
-    params += ali_to_string(ali->speech_rate);
-    params += ali_to_string(ali->pitch_rate);
-
-    // create voice path
-    string voice_path = globals.cache_path;
-    voice_path += SWITCH_PATH_SEPARATOR;
-    voice_path += ali->voice;
-    voice_path += "_";
-    voice_path += ali_md5(params.c_str());
-    if (SWITCH_STATUS_SUCCESS != switch_directory_exists(voice_path.c_str(), sh->memory_pool)) {
-        switch_dir_make(voice_path.c_str(), SWITCH_DEFAULT_DIR_PERMS, sh->memory_pool);
-    }
-    
-    // check file exist
-    string voice_file = voice_path;
-    voice_file += SWITCH_PATH_SEPARATOR;
+	
+    string voice_file = "/tmp/ali_tts/";
     voice_file += ali_md5(text);
     voice_file += ".wav";
+	
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts_speech_feed_tts audio_file: %s\n", voice_file.c_str());
 
     ali->voice_file = switch_core_strdup(sh->memory_pool, voice_file.c_str());
     ali->voice_cursor = 0;
 
-    if (SWITCH_STATUS_SUCCESS != switch_file_exists(voice_file.c_str(), sh->memory_pool)) {
-        return ali_cloud_tts(ali->app_key, ali->access_key, ali->key_secret, ali->voice, ali->volume, ali->format, ali->speech_rate, ali->pitch_rate, ali->sample_rate, text, voice_file);
-    }
-    
-    return SWITCH_STATUS_SUCCESS;
+    return ali_cloud_tts(ali->app_key, ali->access_key, ali->key_secret, ali->voice, ali->volume, ali->format, ali->speech_rate, ali->pitch_rate, ali->sample_rate, text, voice_file);
 }
 
 // stop tts
 static void ali_speech_flush_tts(switch_speech_handle_t *sh)
 {
+	// ali_config *ali = (ali_config *) sh->private_info;
+	// switch_file_remove(ali->voice_file, NULL);
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_speech_flush_tts.\n");
 }
 
 // read tts data
@@ -379,7 +346,6 @@ static switch_status_t ali_speech_read_tts(switch_speech_handle_t *sh, void *dat
 static void ali_text_param_tts(switch_speech_handle_t *sh, char *param, const char *val)
 {
     ali_config *ali = (ali_config *) sh->private_info;
-    assert(ali != NULL);
 
     if (!strcasecmp(param, "app_key")) {
         ali->app_key = switch_core_strdup(sh->memory_pool, val);
@@ -416,9 +382,10 @@ static void ali_float_param_tts(switch_speech_handle_t *sh, char *param, double 
 
 SWITCH_MODULE_LOAD_FUNCTION(mod_ali_tts_load)
 {
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "load ali_tts start...");
+	
     switch_speech_interface_t *speech_interface;
 
-    /* connect my internal structure to the blank pointer passed to me */
     *module_interface = switch_loadable_module_create_module_interface(pool, modname);
     speech_interface = (switch_speech_interface_t *)switch_loadable_module_create_interface(*module_interface, SWITCH_SPEECH_INTERFACE);
     speech_interface->interface_name = MOD_NAME;
@@ -437,7 +404,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_ali_tts_load)
     NlsClient::getInstance()->setLogConfig("ali-speech", LogDebug);
     NlsClient::getInstance()->startWorkThread(globals.thread_count);
 
-    /* indicate that the module should continue to be loaded */
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_WARNING, "load ali_tts end.");
+	
     return SWITCH_STATUS_SUCCESS;
 }
 

@@ -17,6 +17,9 @@ cp ali_tts.xml /usr/local/freeswitch/etc/freeswitch/autoload_configs
 cp NlsSdkCpp3.X/lib/libalibabacloud-idst-speech.* /usr/lib/
 
 # fs_cli 客户端中 load mod_ali_tts
+
+mkdir /tmp/ali_tts/
+chmod 775 /tmp/ali_tts/
 ```
 
 
