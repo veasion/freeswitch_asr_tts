@@ -40,12 +40,13 @@
 #include <nlsEvent.h>
 #include <speechSynthesizerRequest.h>
 #include <nlsToken.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+
 
 using namespace std;
 using namespace AlibabaNlsCommon;
-
-//using std::ofstream;
-//using std::ios;
 
 using AlibabaNls::NlsClient;
 using AlibabaNls::NlsEvent;
@@ -88,21 +89,19 @@ struct ali_tts_config {
     int pitch_rate;
     char* voice_file;
     int voice_cursor;
-    // switch_file_handle_t *fh;
-    // switch_buffer_t *audio_buffer;
 };
 
 // 自定义事件回调参数
 struct ParamCallBack {
     std::string binAudioFile;
     std::ofstream audioFile;
+	SpeechSynthesizerRequest* request;
 };
 
 typedef struct ali_tts_config ali_config;
 
 static switch_status_t ali_do_config(void) {
     switch_xml_t cfg, xml, settings, param;
-	// memset((char*)&globals, 0, sizeof(globals));
     globals.thread_count = 4;
     globals.cache_size = 1600;
     globals.app_key = NULL;
@@ -157,6 +156,10 @@ static switch_status_t ali_speech_open(switch_speech_handle_t *sh, const char *v
 static switch_status_t ali_speech_close(switch_speech_handle_t *sh, switch_speech_flag_t *flags)
 {
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_speech_close.\n");
+	ali_config *ali = (ali_config *) sh->private_info;
+	// delete file
+    // switch_file_remove(ali->voice_file, NULL);
+	unlink(ali->voice_file);
     return SWITCH_STATUS_SUCCESS;
 }
 
@@ -167,21 +170,21 @@ static void on_completed(NlsEvent* cbEvent, void* cbParam) {
 static void on_closed(NlsEvent* cbEvent, void* cbParam) {
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_closed.\n");
     ParamCallBack* tmpParam = (ParamCallBack*)cbParam;
+    NlsClient::getInstance()->releaseSynthesizerRequest(tmpParam->request);
     tmpParam->audioFile.close();
-    delete tmpParam; 
+    delete tmpParam;
 }
 
 static void on_failed(NlsEvent* cbEvent, void* cbParam) {
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_failed.\n");
     ParamCallBack* tmpParam = (ParamCallBack*)cbParam;
-    // remove file
-    switch_file_remove(tmpParam->binAudioFile.c_str(), NULL);
+    delete tmpParam;
 }
 
 static void on_received(NlsEvent* cbEvent, void* cbParam) {
     ParamCallBack* tmpParam = (ParamCallBack*)cbParam;
     const vector<unsigned char>& data = cbEvent->getBinaryData();
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_received: status code=%d, task id=%s, data size=%d.\n", cbEvent->getStatusCode(), cbEvent->getTaskId(), data.size());
+	// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_received: status code=%d, task id=%s, data size=%ld.\n", cbEvent->getStatusCode(), cbEvent->getTaskId(), data.size());
     if (data.size() > 0) {
         tmpParam->audioFile.write((char*)&data[0], data.size());
         tmpParam->audioFile.flush();
@@ -226,9 +229,11 @@ static switch_status_t ali_cloud_tts(const char* appKey, const char* accessKey, 
     SpeechSynthesizerRequest* request = NlsClient::getInstance()->createSynthesizerRequest();
     if (request) {
         ParamCallBack* cbParam = new ParamCallBack;
+		cbParam->request = request;
         cbParam->binAudioFile = file;
         cbParam->audioFile.open(cbParam->binAudioFile.c_str(), std::ios::binary | std::ios::out);
-		// request->setUrl("wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1");
+		// 设置URL
+		request->setUrl("wss://nls-gateway-cn-shanghai.aliyuncs.com/ws/v1");
         // 设置音频合成结束回调函数
         request->setOnSynthesisCompleted(on_completed, cbParam);
         // 设置音频合成通道关闭回调函数
@@ -255,15 +260,16 @@ static switch_status_t ali_cloud_tts(const char* appKey, const char* accessKey, 
         request->setSampleRate(sampleRate);
         // 转换文本
         request->setText(text);
-        // start convert
+        // tts start
 		int status = request->start();
 		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts request status: %d\n", status);
         if (status >= 0) {
-			// request->stop();
-            // NlsClient::getInstance()->releaseSynthesizerRequest(request);
+			// success
             return SWITCH_STATUS_SUCCESS;
         } else {
+			// error
 			request->stop();
+			NlsClient::getInstance()->releaseSynthesizerRequest(request);
 		}
     }
     
@@ -282,6 +288,12 @@ static switch_status_t ali_speech_feed_tts(switch_speech_handle_t *sh, char *tex
     ali_config *ali = (ali_config *) sh->private_info;
 	
     string voice_file = "/tmp/ali_tts/";
+	
+	if (access(voice_file.c_str(), 0) == -1) {
+		mkdir(voice_file.c_str(), S_IRWXU | S_IRWXG | S_IROTH);
+		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "mkdir tts_audio_path: %s\n", voice_file.c_str());
+	}
+	
     voice_file += ali_md5(text);
     voice_file += ".wav";
 	
@@ -296,8 +308,6 @@ static switch_status_t ali_speech_feed_tts(switch_speech_handle_t *sh, char *tex
 // stop tts
 static void ali_speech_flush_tts(switch_speech_handle_t *sh)
 {
-	// ali_config *ali = (ali_config *) sh->private_info;
-	// switch_file_remove(ali->voice_file, NULL);
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_speech_flush_tts.\n");
 }
 
@@ -313,33 +323,6 @@ static switch_status_t ali_speech_read_tts(switch_speech_handle_t *sh, void *dat
         }
         ali->voice_cursor += read_size;
     }
-    /*
-    if (ali->fh != NULL && switch_test_flag(ali->fh, SWITCH_FILE_OPEN)) {
-        size_t my_datalen = *datalen / 2;
-        if (switch_core_file_read(ali->fh, data, &my_datalen) != SWITCH_STATUS_SUCCESS) {
-            if (switch_test_flag(ali->fh, SWITCH_FILE_OPEN)) {
-                switch_core_file_close(ali->fh);
-            }
-            return SWITCH_STATUS_FALSE;
-        }
-        *datalen = my_datalen * 2;
-        if (datalen == 0) {
-            if (switch_test_flag(ali->fh, SWITCH_FILE_OPEN)) {
-                switch_core_file_close(ali->fh);
-            }
-            return SWITCH_STATUS_BREAK;
-        }
-    } else {
-        if (ali_file_size(ali->voice_file) >= globals.cache_size) {
-            if (switch_core_file_open(ali->fh, ali->voice_file, 0, ali->sample_rate, SWITCH_FILE_FLAG_READ | SWITCH_FILE_DATA_SHORT, NULL) != SWITCH_STATUS_SUCCESS) {
-                switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "mod_ali_tts ----- failed to open file: %s\n", ali->voice_file);
-                return SWITCH_STATUS_FALSE;
-            }
-        } else {
-            switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "mod_ali_tts ----- wait file: %s cache enough\n", ali->voice_file);
-        }
-    }
-    */
     return SWITCH_STATUS_SUCCESS;
 }
 
@@ -417,4 +400,3 @@ SWITCH_MODULE_SHUTDOWN_FUNCTION(mod_ali_tts_shutdown)
     switch_safe_free(globals.key_secret);
     return SWITCH_STATUS_UNLOAD;
 }
-
