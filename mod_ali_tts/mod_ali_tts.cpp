@@ -155,11 +155,11 @@ static switch_status_t ali_speech_open(switch_speech_handle_t *sh, const char *v
 
 static switch_status_t ali_speech_close(switch_speech_handle_t *sh, switch_speech_flag_t *flags)
 {
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_speech_close.\n");
 	ali_config *ali = (ali_config *) sh->private_info;
 	// delete file
-    // switch_file_remove(ali->voice_file, NULL);
-	unlink(ali->voice_file);
+    // // switch_file_remove(ali->voice_file, NULL);
+	// unlink(ali->voice_file);
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_speech_close.\n");
     return SWITCH_STATUS_SUCCESS;
 }
 
@@ -168,27 +168,27 @@ static void on_completed(NlsEvent* cbEvent, void* cbParam) {
 }
 
 static void on_closed(NlsEvent* cbEvent, void* cbParam) {
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_closed.\n");
     ParamCallBack* tmpParam = (ParamCallBack*)cbParam;
-    NlsClient::getInstance()->releaseSynthesizerRequest(tmpParam->request);
     tmpParam->audioFile.close();
+    NlsClient::getInstance()->releaseSynthesizerRequest(tmpParam->request);
     delete tmpParam;
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_closed.\n");
 }
 
 static void on_failed(NlsEvent* cbEvent, void* cbParam) {
-	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_failed.\n");
     ParamCallBack* tmpParam = (ParamCallBack*)cbParam;
     delete tmpParam;
+	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_failed.\n");
 }
 
 static void on_received(NlsEvent* cbEvent, void* cbParam) {
     ParamCallBack* tmpParam = (ParamCallBack*)cbParam;
     const vector<unsigned char>& data = cbEvent->getBinaryData();
-	// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_received: status code=%d, task id=%s, data size=%ld.\n", cbEvent->getStatusCode(), cbEvent->getTaskId(), data.size());
     if (data.size() > 0) {
         tmpParam->audioFile.write((char*)&data[0], data.size());
         tmpParam->audioFile.flush();
     }
+	// switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts on_received: status code=%d, task id=%s, data size=%ld.\n", cbEvent->getStatusCode(), cbEvent->getTaskId(), data.size());
 }
 
 static string ali_get_token(const char* accessKey, const char* keySecret) {
@@ -262,14 +262,15 @@ static switch_status_t ali_cloud_tts(const char* appKey, const char* accessKey, 
         request->setText(text);
         // tts start
 		int status = request->start();
-		switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts request status: %d\n", status);
         if (status >= 0) {
 			// success
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts request success: %d\n", status);
             return SWITCH_STATUS_SUCCESS;
         } else {
 			// error
 			request->stop();
 			NlsClient::getInstance()->releaseSynthesizerRequest(request);
+			switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_ERROR, "ali_tts request error: %d\n", status);
 		}
     }
     
