@@ -141,10 +141,10 @@ static switch_status_t ali_speech_open(switch_speech_handle_t *sh, const char *v
     ali_config *conf = (ali_config *) switch_core_alloc(sh->memory_pool, sizeof(ali_config));
     conf->voice = switch_core_strdup(sh->memory_pool, voice_name);
     conf->sample_rate = rate;
-    conf->volume = 80;
+    conf->volume = 100;
     conf->speech_rate = 0;
     conf->pitch_rate = 0;
-    conf->format = switch_core_strdup(sh->memory_pool, "wav");
+    conf->format = switch_core_strdup(sh->memory_pool, "pcm");
     conf->app_key = switch_core_strdup(sh->memory_pool, globals.app_key);
     conf->access_key = switch_core_strdup(sh->memory_pool, globals.access_key);
     conf->key_secret = switch_core_strdup(sh->memory_pool, globals.key_secret);
@@ -297,7 +297,7 @@ static switch_status_t ali_speech_feed_tts(switch_speech_handle_t *sh, char *tex
 	}
 	
     voice_file += ali_md5(text);
-    voice_file += ".wav";
+    voice_file += ".pcm";
 	
 	switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "ali_tts_speech_feed_tts audio_file: %s\n", voice_file.c_str());
 
