@@ -169,28 +169,31 @@ void onAsrSentenceBegin(NlsEvent* cbEvent, void* cbParam) {
  */
 void onAsrSentenceEnd(NlsEvent* cbEvent, void* cbParam) {
 	AsrParamCallBack* tmpParam = (AsrParamCallBack*)cbParam;
-     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrSentenceEnd: %s\n", tmpParam->sUUID);
-     switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrSentenceEnd: status code=%d, task id=%s, index=%d, time=%d, begin_time=%d, result=%s\n", cbEvent->getStatusCode(), cbEvent->getTaskId(),
-                cbEvent->getSentenceIndex(),
-                cbEvent->getSentenceTime(),
-                cbEvent->getSentenceBeginTime(),
-                cbEvent->getResult()
-                );
-       switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "onAsrSentenceEnd: all response=%s\n", cbEvent->getAllResponse());
-       switch_event_t *event = NULL;
-	   switch_core_session_t *ses = tmpParam->session;
-       // if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
-	   //     switch_core_session_rwunlock(ses);
-	   // }
-       switch_channel_t *channel = switch_core_session_get_channel(ses);
-       if(switch_event_create(&event, SWITCH_EVENT_CUSTOM) == SWITCH_STATUS_SUCCESS) {
-            event->subclass_name = strdup("start_asr");
-            switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Event-Subclass", event->subclass_name);
-            switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "UUID", tmpParam->sUUID);
-            switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "ASR-Response", cbEvent->getAllResponse());
-            switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Channel", switch_channel_get_name(channel));
-            switch_event_fire(&event);
-       }
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrSentenceEnd: %s\n", tmpParam->sUUID);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_NOTICE,"onAsrSentenceEnd: status code=%d, task id=%s, index=%d, time=%d, begin_time=%d, result=%s\n", cbEvent->getStatusCode(), cbEvent->getTaskId(),
+	   cbEvent->getSentenceIndex(),
+	   cbEvent->getSentenceTime(),
+	   cbEvent->getSentenceBeginTime(),
+	   cbEvent->getResult()
+	);
+    switch_log_printf(SWITCH_CHANNEL_LOG, SWITCH_LOG_INFO, "onAsrSentenceEnd: all response=%s\n", cbEvent->getAllResponse());
+    switch_event_t *event = NULL;
+	switch_core_session_t *ses = tmpParam->session;
+    // if ((ses = switch_core_session_force_locate(tmpParam->sUUID))) {
+	//     switch_core_session_rwunlock(ses);
+	// }
+    switch_channel_t *channel = switch_core_session_get_channel(ses);
+    if(switch_event_create(&event, SWITCH_EVENT_CUSTOM) == SWITCH_STATUS_SUCCESS) {
+         event->subclass_name = strdup("start_asr");
+         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Event-Subclass", event->subclass_name);
+         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Caller-Unique-ID", tmpParam->sUUID);
+         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "ASR-Response", cbEvent->getAllResponse());
+         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Channel-Name", switch_channel_get_name(channel));
+         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "variable_bot_id", switch_channel_get_variable(channel, "bot_id"));
+         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Caller-Caller-ID-Number", switch_channel_get_variable(channel, "caller_id_number"));
+         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Caller-Destination-Number", switch_channel_get_variable(channel, "destination_number"));
+         switch_event_fire(&event);
+    }
 }
 
 /**
@@ -218,9 +221,12 @@ void onAsrTranscriptionResultChanged(NlsEvent* cbEvent, void* cbParam) {
     if (switch_event_create(&event, SWITCH_EVENT_CUSTOM) == SWITCH_STATUS_SUCCESS) {
         event->subclass_name = strdup("update_asr");
         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Event-Subclass", event->subclass_name);
-        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "UUID", tmpParam->sUUID);
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Caller-Unique-ID", tmpParam->sUUID);
         switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "ASR-Response", cbEvent->getAllResponse());
-        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Channel", switch_channel_get_name(channel));
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Channel-Name", switch_channel_get_name(channel));
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "variable_bot_id", switch_channel_get_variable(channel, "bot_id"));
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Caller-Caller-ID-Number", switch_channel_get_variable(channel, "caller_id_number"));
+        switch_event_add_header_string(event, SWITCH_STACK_BOTTOM, "Caller-Destination-Number", switch_channel_get_variable(channel, "destination_number"));
         switch_event_fire(&event);
     }
 }
