@@ -347,6 +347,7 @@ SpeechTranscriberRequest* generateAsrRequest(AsrParamCallBack * cbParam) {
 
     request->setFormat("pcm");                        // 设置音频数据编码格式, 默认是pcm
     request->setSampleRate(SAMPLE_RATE);              // 设置音频数据采样率, 可选参数，目前支持16000, 8000. 默认是16000
+	request->setMaxSentenceSilence(800);              // 设置VAD阈值，静音时长超过该阈值会被认为断句，参数范围200ms～2000ms，默认值800ms。
     request->setIntermediateResult(true);             // 设置是否返回中间识别结果, 可选参数. 默认false
     request->setPunctuationPrediction(true);          // 设置是否在后处理中添加标点, 可选参数. 默认false
     request->setInverseTextNormalization(true);       // 设置是否在后处理中执行数字转写, 可选参数. 默认false
@@ -658,7 +659,8 @@ SWITCH_MODULE_LOAD_FUNCTION(mod_ali_asr_load)
         return SWITCH_STATUS_FALSE;
     }
 
-    NlsClient::getInstance()->startWorkThread(4);
+	// NlsClient::getInstance()->startWorkThread(-1);
+	NlsClient::getInstance()->startWorkThread(4);
 
     switch_application_interface_t *app_interface;
 
