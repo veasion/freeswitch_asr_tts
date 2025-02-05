@@ -10,6 +10,4 @@
 
 项目的发展离不开您的支持，请作者喝杯咖啡吧~
 
-ps：辣条也行 ☕
-
 ![支付宝](https://veasion.oss-cn-shanghai.aliyuncs.com/alipay.png?x-oss-process=image/resize,m_lfit,h_360,w_360)
